@@ -44,6 +44,7 @@
   ```
   - istio 설치한 디렉토리에서 install/kubernetes/helm/istio-init 밑에 있는 template들을 render하여 kubectl로 실행한다.
     - 이때 위에서 생성한 namesapce를 지정해야함 `--namespace istio-system`
+    - 또한 미리 설정해둔 `istio-init`이라는 profile을 사용했다. [여기](https://istio.io/docs/setup/kubernetes/additional-setup/config-profiles/)에서 profile별 어떻게 다른지 알아볼 수 있다.
   ```bash
   $ helm template install/kubernetes/helm/istio-init --name istio-init --namespace istio-system | kubectl apply -f -
   # 아래와 같은 kubenetes objects들이 생성된다.
