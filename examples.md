@@ -27,6 +27,7 @@
  
 ### Kubernetes 환경에서의 실행
   `Minikube환경에서는 적어도 4GB램을 보장되어야한다. GKE환경에서는 적어도 4개의 GKE nodes가 필요하다.`
+  `본 예제의 환경인 DockerCE에서는 Advanced 메뉴를 통해서 8GB정도를 할당해주기를 바란다.`
   
   1. automatic sidecar injection을 사용하기 위해서 application을 실행시킬 namespace(본 예제에서는 default를 사용함)에 labeling하자.
   ```bash
@@ -39,9 +40,9 @@
   $ kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
   ```
    - 만약 automatic sidecar injection이 disable된 상태에서 [manual sidecar injection](https://istio.io/docs/setup/kubernetes/additional-setup/sidecar-injection/#manual-sidecar-injection)을 사용하고 싶다면, `istioctl kube-inject` 커맨드를 사용해서 bookinfo.yaml을 기준으로 살짝 변경한 결과를 가지고 실행시킨다.
-    ```bash
-    $ kubectl apply -f <(istioctl kube-inject -f samples/bookinfo/platform/kube/bookinfo.yaml)
-    ```
+  ```bash
+  $ kubectl apply -f <(istioctl kube-inject -f samples/bookinfo/platform/kube/bookinfo.yaml)
+  ```
   3. 배포된 서비스를 확인해보자.
   ```bash
   $ kubectl get services
