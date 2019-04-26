@@ -99,3 +99,86 @@ $ kubectl get destinationrules -o yaml
   
   
 ### 사용자의 Context에 따른 라우팅 
+이번에는 이름이 Json이라는 사람이 접속했을때는 reviews:v2로 라우팅되게 해보자.
+istio에서는 user의 identity를 알 수 있는 것을 지원하고 있지 않기때문에, 본 섹션에서는 end-user라는 custom header 내용을 기준으로 다른 reviews service로 라우팅할 것이다. (사실, productpage service에서 end-user라는 custom header에 사용자의 ID를 넣어준다)
+
+
+1. 아래 커맨드로 user-based 라우팅을 배포해보자.
+```bash
+$ kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+```
+
+2. 배포된 virtual service를 확인해보자.
+```bash
+$ kubectl get virtualservice reviews -o yaml
+```
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+  ...
+spec:
+  hosts:
+  - reviews
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+    route:
+    - destination:
+        host: reviews
+        subset: v2
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+```
+  - `spec.http.match.headers`를 통해서 `end-user`라는 header가 `jason`이 정확히(`exact`) 매칭되는지 설정되었다.
+  
+3. `/productpage` 페이지를 브라우저로 열고, `jason`이라는 ID로 로그인해보자. (Password도 `jason`)
+  - 그리고 새로고침해보면, Reviews 부분에 Black stars 확인할 수 있을 것이다.
+  
+4. 만약 `jason`이 아니 다른 사용자로 로그인했다면, Black stars를 절대 볼 수 없을 것이다.
+  - 위의 match에 걸리지 않았으므로, 기본 라우팅 설정인 `reviews:v1`으로 라우팅될 것이다. 
+  
+### Wrap up
+- 본 섹션에서는 최초에는 `v1`으로 무조건 라우팅하다가, end-user라는 custom header를 보고 jason이라는 사람으로 로그인했을때 `v2`로 라우팅되게 해봤다.
+- 쿠버네티스 services는 istio의 L7 라우팅 기능을 제대로 사용하기 위해서는 몇가지 사항을 만족해야한다. ([Requirements for Pods and Services](https://istio.io/docs/setup/kubernetes/prepare/requirements/)참고)
+- Traffic Shifting 섹션에서는 하나의 버전에서 다른 버전으로 점진적으로 트래픽을 전환하는(traffic shifting) 기본적인 패턴에 대해서 배울 것이다.
+
+### Wrap up
+```bash
+$ kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+```
+  - 위 커맨드로 본 섹션에서 사용한 virtual service를 삭제할 수 있다.
+
+
+
+## Fault Injection
+
+### 준비
+- Istio 설치 : https://github.com/grepsean/study-istio/blob/master/setup.md
+- Bookinfo Sample Application 배포 : https://github.com/grepsean/study-istio/blob/master/examples.md
+- Traffic Management 컨셉 확인 : https://istio.io/docs/concepts/traffic-management/
+- [Traffic Routing 섹션](#Configuring-Request-Routing) 에서 살펴본 아래 실행해 보기
+```bash
+$ kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+$ kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+```
+  - 이전 섹션에서의 라우팅 flow에 대한 설정 이해하기
+    - `productpage` → `reviews:v2` → `ratings` (jason이라는 사용자만)
+    - `productpage` → `reviews:v1` (이외의 모든 사용자)
+
+### Injecting an HTTP delay fault 
+Bookinfo microservice에 대한 resiliency를 테스트하기 위해서 `7초` 정도의 딜레이가 생기게 해보자.
+  - 단, `reviews:v2`와 `ratings` service 사이의 `json`이라는 사용자에 대해서만
+이 테스트에서는 Bookinfo 내부에서 의도적으로 발생시킨 버그에 대해서는 다루지 않는다.
+
+`reviews:v2` service에서는 `ratings` service를 호출시 `10초`의 timeout이 하드코딩되어 있다.
+따라서 `7초`의 딜레이를 주더라도, 우선 에러없이 정상적으로 서비스되어야 한다.
+
+
+
+
