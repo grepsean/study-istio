@@ -5,3 +5,97 @@
 ### 준비
 - Istio 설치 : https://github.com/grepsean/study-istio/blob/master/setup.md
 - Bookinfo Sample Application 배포 : https://github.com/grepsean/study-istio/blob/master/examples.md
+- Traffic Management 컨셉 확인 : https://istio.io/docs/concepts/traffic-management/
+
+## Bookinfo Sample
+- 이전에 살펴봤듯이 4개의 microservices로 구성되었다.
+- 이 microservices중에 `reviews`는 내용이 다른 3가지 버전(v1, v2, v3)이 배포되어 있다.
+- `/productpage`를 브라우저에서 열어보면 접근할때 마다 reviews쪽이 다른 스타일로 보여지게될 것이다.
+  - 이는 default service version을 명시하지 않아서, istio가 round robin 스타일로 라우팅을 처리하기 때문이다.
+- 이번 섹션에서는 우선 모든 트래픽을 v1으로 보내보자. 그리고나서 HTTP request header에 따라 라우팅하는것도 해보자.
+
+## Virtual service 
+우선 모든 요청을 v1으로 라우팅해보자.
+1. 아래를 실행시켜서 virtual services를 배포하자.
+```bash
+$ kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+```
+  - 설정이 적용되기까지는 몇초 정도 소요된다. 
+  
+2. `$ kubectl get virtualservices -o yaml`을 실행하면 아래와 같이 배포된 VirtualService 내용을 확인할 수 있다.
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: details
+  ...
+spec:
+  hosts:
+  - details
+  http:
+  - route:
+    - destination:
+        host: details
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: productpage
+  ...
+spec:
+  gateways:
+  - bookinfo-gateway
+  - mesh
+  hosts:
+  - productpage
+  http:
+  - route:
+    - destination:
+        host: productpage
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+  ...
+spec:
+  hosts:
+  - ratings
+  http:
+  - route:
+    - destination:
+        host: ratings
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+  ...
+spec:
+  hosts:
+  - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+---
+```
+  - 위 설정에서 볼 수 있듯이, 모든 service에 대해서 subset을 v1 하나만 설정한것을 확인할 수 있다.
+  
+3. 또한 아래 커맨드로 정의되어 있는 subset을 확인할 수 있음
+```bash
+$ kubectl get destinationrules -o yaml
+```
+
+### 적용된 라우팅 테스트
+브라우저로 열어둔 `/productpage` 페이지를 새로고침하면 바로 확인가능하다.
+- 이때 접근하는 URL은 `http://$GATEWAY_URL/productpage`
+  - `$GATEWAY_URL` 환경변수의 경우 [Bookinfo Sample](https://github.com/grepsean/study-istio/blob/master/examples.md#ingress-ip%EC%99%80-port)에서 먼저 설명했듯이, ingress를 이용해서 외부에서 접근가능한 External IP(혹은 Host Name)이다.
+  - 해당 URL로 접근하면 version `reviews:v1`인 review service로 트래픽이 전달되기 때문에, rating starts는 아무리 새로고침해도 보이지 않을 것이다. 
+  
+  
+### 사용자의 Context에 따른 라우팅 
