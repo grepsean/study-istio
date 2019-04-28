@@ -140,7 +140,7 @@ EOF
 2. 일부 트래픽을 해당 서비스로 보내보자.
 ```console
 $ export SLEEP_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
-$ kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | jq .
+$ kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | python -m json.tool
 {
   "headers": {
     "Accept": "*/*",
@@ -201,7 +201,7 @@ EOF
 
 2. 트래픽을 전송하자.
 ```console
-$ kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | jq .
+$ kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | python -m json.tool
 ```
   - 위처럼 실행하면, `v1`과 `v2` 모두에서 access log를 확인할 수 있을 것이다.
 ```console
