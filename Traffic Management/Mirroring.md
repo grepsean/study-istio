@@ -8,7 +8,7 @@ Mirroring은 live traffic을 복사해서 mirroed serivce로 똑같이 보내준
 - [httpbin](https://github.com/istio/istio/tree/release-1.1/samples/httpbin)를 로깅이 가능한 두개의 버전으로 배포하자. 
   - httpbin-v1:
 ```console
-$ cat <<EOF | istioctl kube-inject -f - | kubectl create -f -
+$ cat <<EOF | istioctl kube-inject -f - | kubectl apply -f -
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
@@ -32,7 +32,7 @@ EOF
 ```
   - httpbin-v2:
 ```console
-$ cat <<EOF | istioctl kube-inject -f - | kubectl create -f -
+$ cat <<EOF | istioctl kube-inject -f - | kubectl apply -f -
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
@@ -56,7 +56,7 @@ EOF
 ```
   - httpbin Kubernetes service:
 ```console
-$ kubectl create -f - <<EOF
+$ kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Service
 metadata:
@@ -76,7 +76,7 @@ EOF
 - `sleep` 서비스를 시작해서, `curl`을 이용해서 load할 수 있다.
   - sleep service: 
 ```console
-$ cat <<EOF | istioctl kube-inject -f - | kubectl create -f -
+$ cat <<EOF | istioctl kube-inject -f - | kubectl apply -f -
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
