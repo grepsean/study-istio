@@ -54,7 +54,7 @@ spec:
         host: ratings
         subset: v1
 ```
-  - spec.host.http.fault를 통해서 delay를 생성했으며, `100%` 확률로 `7초`의 고정된 delay를 발생시킨다.
+  - spec.http.fault를 통해서 delay를 생성했으며, `100%` 확률로 `7초`의 고정된 delay를 발생시킨다.
   - 사용가능한 옵션에 대해서는 공식문서의 [HTTPFaultInjection.Delay](https://istio.io/docs/reference/config/networking/v1alpha3/virtual-service/#HTTPFaultInjection-Delay) 섹션을 참고하자.
 
 ### 적용된 delay 설정을 테스트 해보자
@@ -134,7 +134,7 @@ spec:
         host: ratings
         subset: v1
 ```
-  - spec.hosts.http.fault.abort를 통해서 100% 확률로 HTTP 500응답을 발생시킨다. 
+  - spec.http.fault.abort를 통해서 100% 확률로 HTTP 500응답을 발생시킨다. 
   - 더 자세한 옵션에 대한 설명은 [HTTPFaultInjection.Abort](https://istio.io/docs/reference/config/networking/v1alpha3/virtual-service/#HTTPFaultInjection-Abort) 섹션을 참고하자.
 
 ### 적용된 abort 설정을 테스트해보자
