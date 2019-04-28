@@ -4,7 +4,7 @@
 - Istio 설치 : https://github.com/grepsean/study-istio/blob/master/setup.md
 - Bookinfo Sample Application 배포 : https://github.com/grepsean/study-istio/blob/master/examples.md
 - Traffic Management 컨셉 확인 : https://istio.io/docs/concepts/traffic-management/
-- [Traffic Routing 섹션](#Configuring-Request-Routing) 에서 살펴본 아래 실행해 보기
+- [Traffic Routing 섹션](https://github.com/grepsean/study-istio/blob/master/Traffic%20Management/Configuring-Request-Routing.md#configuring-request-routing) 에서 살펴본 아래 실행해 보기
 ```bash
 $ kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
 $ kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
