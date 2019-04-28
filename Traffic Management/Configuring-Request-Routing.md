@@ -146,8 +146,10 @@ spec:
 - 쿠버네티스 services는 istio의 L7 라우팅 기능을 제대로 사용하기 위해서는 몇가지 사항을 만족해야한다. ([Requirements for Pods and Services](https://istio.io/docs/setup/kubernetes/prepare/requirements/)참고)
 - Traffic Shifting 섹션에서는 하나의 버전에서 다른 버전으로 점진적으로 트래픽을 전환하는(traffic shifting) 기본적인 패턴에 대해서 배울 것이다.
 
-### Wrap up
+### Cleanup
+1. 아래 커맨드를 이용해 본 섹션에서 사용한 virtual service를 삭제할 수 있다.
 ```bash
 $ kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
 ```
-  - 위 커맨드로 본 섹션에서 사용한 virtual service를 삭제할 수 있다.
+
+2. 만약 다음 섹션들을 보지 않을 것이라면, [Bookinfo cleanup](https://github.com/grepsean/study-istio/blob/master/examples.md#cleanup) 섹션을 참고해서 예제에서 생성한 모든 Bookinfo resource를 삭제할 수 있다.
