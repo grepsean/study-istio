@@ -111,3 +111,104 @@ x-envoy-upstream-service-time: 36
 ```
   - 위처럼 request를 확인했다면 일단 성공한 것이다.
   
+### Tripping the circuit breaker
+`DestinationRule`에 `maxConnections: 1`과 `http1MaxPendingRequests: 1`로 설정했는데, 이는 만약 1개의 connection을 초과하거나 동시에 요청이 들어왔을 때에 `istio-proxy`가 circuit을 _open_ 해서 이후 요청에 대해서는 failure하게 된다.
+
+1. `-c 2` 옵션을 이용해서 2개의 동시 connection으로 설정하여, 20개의 reqeusts를 보내보자.
+```console
+kubectl exec -it $FORTIO_POD -c fortio /usr/bin/fortio -- load -c 2 -qps 0 -n 20 -loglevel Warning http://httpbin:8000/get
+
+Fortio 0.6.2 running at 0 queries per second, 2->2 procs, for 5s: http://httpbin:8000/get
+Starting at max qps with 2 thread(s) [gomax 2] for exactly 20 calls (10 per thread + 0)
+23:51:10 W http.go:617> Parsed non ok code 503 (HTTP/1.1 503)
+Ended after 106.474079ms : 20 calls. qps=187.84
+Aggregated Function Time : count 20 avg 0.010215375 +/- 0.003604 min 0.005172024 max 0.019434859 sum 0.204307492
+# range, mid point, percentile, count
+>= 0.00517202 <= 0.006 , 0.00558601 , 5.00, 1
+> 0.006 <= 0.007 , 0.0065 , 20.00, 3
+> 0.007 <= 0.008 , 0.0075 , 30.00, 2
+> 0.008 <= 0.009 , 0.0085 , 40.00, 2
+> 0.009 <= 0.01 , 0.0095 , 60.00, 4
+> 0.01 <= 0.011 , 0.0105 , 70.00, 2
+> 0.011 <= 0.012 , 0.0115 , 75.00, 1
+> 0.012 <= 0.014 , 0.013 , 90.00, 3
+> 0.016 <= 0.018 , 0.017 , 95.00, 1
+> 0.018 <= 0.0194349 , 0.0187174 , 100.00, 1
+# target 50% 0.0095
+# target 75% 0.012
+# target 99% 0.0191479
+# target 99.9% 0.0194062
+Code 200 : 19 (95.0 %)
+Code 503 : 1 (5.0 %)
+Response Header Sizes : count 20 avg 218.85 +/- 50.21 min 0 max 231 sum 4377
+Response Body/Total Sizes : count 20 avg 652.45 +/- 99.9 min 217 max 676 sum 13049
+All done 20 calls (plus 0 warmup) 10.215 ms avg, 187.8 qps
+```
+  - 출력되는 아래 부분을 통해서 200은 19번, 503이 1번 응답했다는것을 확인할 수 있다.
+
+2. 이제 동시 connection을 3으로 올려보자.
+```console
+$ kubectl exec -it $FORTIO_POD  -c fortio /usr/bin/fortio -- load -c 3 -qps 0 -n 30 -loglevel Warning http://httpbin:8000/get
+
+Fortio 0.6.2 running at 0 queries per second, 2->2 procs, for 5s: http://httpbin:8000/get
+Starting at max qps with 3 thread(s) [gomax 2] for exactly 30 calls (10 per thread + 0)
+23:51:51 W http.go:617> Parsed non ok code 503 (HTTP/1.1 503)
+23:51:51 W http.go:617> Parsed non ok code 503 (HTTP/1.1 503)
+23:51:51 W http.go:617> Parsed non ok code 503 (HTTP/1.1 503)
+23:51:51 W http.go:617> Parsed non ok code 503 (HTTP/1.1 503)
+23:51:51 W http.go:617> Parsed non ok code 503 (HTTP/1.1 503)
+23:51:51 W http.go:617> Parsed non ok code 503 (HTTP/1.1 503)
+23:51:51 W http.go:617> Parsed non ok code 503 (HTTP/1.1 503)
+23:51:51 W http.go:617> Parsed non ok code 503 (HTTP/1.1 503)
+23:51:51 W http.go:617> Parsed non ok code 503 (HTTP/1.1 503)
+23:51:51 W http.go:617> Parsed non ok code 503 (HTTP/1.1 503)
+23:51:51 W http.go:617> Parsed non ok code 503 (HTTP/1.1 503)
+Ended after 71.05365ms : 30 calls. qps=422.22
+Aggregated Function Time : count 30 avg 0.0053360199 +/- 0.004219 min 0.000487853 max 0.018906468 sum 0.160080597
+# range, mid point, percentile, count
+>= 0.000487853 <= 0.001 , 0.000743926 , 10.00, 3
+> 0.001 <= 0.002 , 0.0015 , 30.00, 6
+> 0.002 <= 0.003 , 0.0025 , 33.33, 1
+> 0.003 <= 0.004 , 0.0035 , 40.00, 2
+> 0.004 <= 0.005 , 0.0045 , 46.67, 2
+> 0.005 <= 0.006 , 0.0055 , 60.00, 4
+> 0.006 <= 0.007 , 0.0065 , 73.33, 4
+> 0.007 <= 0.008 , 0.0075 , 80.00, 2
+> 0.008 <= 0.009 , 0.0085 , 86.67, 2
+> 0.009 <= 0.01 , 0.0095 , 93.33, 2
+> 0.014 <= 0.016 , 0.015 , 96.67, 1
+> 0.018 <= 0.0189065 , 0.0184532 , 100.00, 1
+# target 50% 0.00525
+# target 75% 0.00725
+# target 99% 0.0186345
+# target 99.9% 0.0188793
+Code 200 : 19 (63.3 %)
+Code 503 : 11 (36.7 %)
+Response Header Sizes : count 30 avg 145.73333 +/- 110.9 min 0 max 231 sum 4372
+Response Body/Total Sizes : count 30 avg 507.13333 +/- 220.8 min 217 max 676 sum 15214
+All done 30 calls (plus 0 warmup) 5.336 ms avg, 422.2 qps
+```
+  - 이번에는 36.7% 정도에 대해서는 circuit이 open된 상태에서 응답을 받았을 것이다.  
+
+3. `istio-proxy`의 stats을 확인해보자.
+```console
+$ kubectl exec -it $FORTIO_POD  -c istio-proxy  -- sh -c 'curl localhost:15000/stats' | grep httpbin | grep pending
+
+cluster.outbound|80||httpbin.springistio.svc.cluster.local.upstream_rq_pending_active: 0
+cluster.outbound|80||httpbin.springistio.svc.cluster.local.upstream_rq_pending_failure_eject: 0
+cluster.outbound|80||httpbin.springistio.svc.cluster.local.upstream_rq_pending_overflow: 12
+cluster.outbound|80||httpbin.springistio.svc.cluster.local.upstream_rq_pending_total: 39
+```
+  - `upstream_rq_pending_overflow`가 12로 나왔는데, 이 값이 실제 circuit breaking에 의해서 falgged된 요청이다.
+  
+### Cleanup
+1. 위에서 설정한 desitination rule을 삭제하자.
+```console
+$ kubectl delete destinationrule httpbin
+```
+
+2. `httpbin` 서비스와 함께 추가한 client도 삭제해보자.
+```console
+$ kubectl delete deploy httpbin fortio-deploy
+$ kubectl delete svc httpbin
+```
