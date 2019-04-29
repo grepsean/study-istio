@@ -137,6 +137,8 @@ spec:
   
 3. `/productpage` 페이지를 브라우저로 열고, `jason`이라는 ID로 로그인해보자. (Password도 `jason`)
   - 그리고 새로고침해보면, Reviews 부분에 Black stars 확인할 수 있을 것이다.
+  - Password 부분은 아무거나 가능하다. 그냥 `session`에 `user`의 ID를 저장할 뿐이다.
+    - https://github.com/istio/istio/tree/master/samples/bookinfo/src/productpage#L219
   
 4. 만약 `jason`이 아니 다른 사용자로 로그인했다면, Black stars를 절대 볼 수 없을 것이다.
   - 위의 match에 걸리지 않았으므로, 기본 라우팅 설정인 `reviews:v1`으로 라우팅될 것이다. 
