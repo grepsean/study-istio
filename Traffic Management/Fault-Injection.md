@@ -79,6 +79,8 @@ spec:
 정답은 바로 `reviews`라는 서비스에서 timeout설정에 의해 발생된 실패때문이다.
 
 `productpage`-`reviews` 서비스 사이에는 `6초`의 timeout설정이 있는데, 실제로는 `3초` + `1재시도`에 의해 총 `6초` 처럼 보인다.
+  - 이때 retry는 로직에서 for문 두번으로 처리한다.
+    - https://github.com/istio/istio/blob/master/samples/bookinfo/src/productpage/productpage.py#L318
 (`reviews`-`ratings` 서비스 사이의 timeout은 `10초`이지만) _fault inection_ 설정에 의해서 `ratings`를 호출하는데 7초의 delay가 발생하므로, `/productpage`를 호출하는 곳에서 timeout이 발생해버린다. 
 
 Enterpise 환경에서는 서로 다른 팀에서 다른 microservices를 각각 개발하다보니 이러한 버그는 언제든지 발생할 수 있다. istio의 fualt injection은 이런 변칙적인 부분을 end user에게 영향없이 확인할 수 있게 도와준다.
@@ -93,6 +95,9 @@ Enterpise 환경에서는 서로 다른 팀에서 다른 microservices를 각각
 3. `/productpage`에서 error가 발생되지 않는지 확인한다.
 
 이러한 수정은 이미 `reviews:v3`버전에 적용되어 있으므로, 모든 traffic을 `reviews:v3`으로 흘려보낸다면, 간단하게 해결할 수 있다. 관련 내용은 [Traffic Shifting](https://istio.io/docs/tasks/traffic-management/traffic-shifting/)에서 살펴볼 수 있다.
+
+`임의저긴 delay를 7s => 5s로 바꿔도 여전히 에러가 발생한다.`
+왜냐면 productpage => reviews로 timeout은 `3초`이다. retry가 `1번`일뿐, 각 try마다 `5초`의 delay가 발생하므로 총 `3초`동안 `2번` 시도해서 총 `6초`가 걸리지만 에러는 여전할 것이다.
 
 ### Injecting an HTTP abort fault
 이번에는 HTTP abort fault를 발생시켜보자. 본 섹션에서는 `ratings`라는 microservice에서 `jason`이라는 테스트 사용자가 로그인할 경우에 HTTP abort를 발생시켜 볼 것이다.
@@ -140,7 +145,7 @@ spec:
 ### 적용된 abort 설정을 테스트해보자
 1. [Bookinfo application](https://github.com/grepsean/study-istio/blob/master/examples.md)을 브라우저에서 실행시키자.
 
-2. `/productpage`에서 `jason`으로 로그인해보면, (위의 abort 설정이 모든 pods에게 전파된 상태라면) 즉시 `Ratings service is currently unavailable`라는 에러 메시지를 확인할 수 있다.
+2. `/productpage`에서 `jason`으로 로그인해보면, (위의 abort 설정이 모든 pods에게 전파된 상태라면) 즉시 [`Ratings service is currently unavailable`](https://github.com/istio/istio/blob/fd77ab302dd72d9b687e81fbdc56af901838035a/samples/bookinfo/src/reviews/reviews-application/src/main/java/application/rest/LibertyRestEndpoint.java#L61)라는 에러 메시지를 확인할 수 있다.
 
 3. `jason` 사용자를 로그아웃하거나, 다른 사용자로 로그인했다면, `/productpage`를 브라우저에서 열면 여전히 `reviews:v1`이 호출될 것이다. 따라서 위의 에러 메시지를 구경할 수 없을 것이다.
 
