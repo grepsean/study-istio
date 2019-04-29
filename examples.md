@@ -14,17 +14,55 @@
  - v3 : ratings 서비스를 호출하고, 1~5개의 red star를 보여준다.
  
 - istio를 사용하지 않는 Bookinfo Application은 아래와 같다.
-<img src="https://istio.io/docs/examples/bookinfo/noistio.svg"/>
+<img src="https://istio.io/docs/examples/bookinfo/noistio.svg" style="background-color:white;"/>
  
 ### Preparation
 - [Install istio](https://github.com/grepsean/study-istio/blob/master/setup.md)
  
- 
 ## Deploying the application
 - 본 예제를 istio에서 실행하기 위해서 application의 변경은 필요없다. 단지 istio가 설치된 환경에서 서비스를 설정하고 실행시키면 된다.
 - istio를 사용하는 경우 Bookinfo Application은 아래와 같다.
-<img src="https://istio.io/docs/examples/bookinfo/withistio.svg" />
- 
+<img src="https://istio.io/docs/examples/bookinfo/withistio.svg" style="background-color:white;" />
+
+### 각 Microservice(Application)을 살펴보자
+
+#### produtpage
+- 사용 언어 및 주요 프레임워크 : `Python`, `Flask`
+- 내부 동작 : 
+  - /productpage : `productId`를 전달받아서 `product`를 찾고, `details`와 `ratings`라는 microservices를 REST 호출하여 `json`결과를 취해서 최종적으로 html 페이지를 렌더링한다.
+
+#### reviews
+- 사용 언어 및 주요 프레임워크 : `Java`, `JAX-RS`
+- 내부 동작 :
+  - /reviews : 
+    - `productId`를 전달받아 `ratings`라는 microservice를 호출한다.
+      - https://github.com/istio/istio/blob/master/samples/bookinfo/src/reviews/reviews-application/src/main/java/application/rest/LibertyRestEndpoint.java#L93
+    - 호출 결과(`ratings`)를 가지고, reviewer1, reviewer2를 합친 reviews 결과를 json으로 반환한다.
+      - https://github.com/istio/istio/blob/master/samples/bookinfo/src/reviews/reviews-application/src/main/java/application/rest/LibertyRestEndpoint.java#L47
+    - 이 microservice에서는 STAR_COLOR, ENABLE_RATINGS 같은 환경변수를 주입받아서 사용한다.
+      - https://github.com/istio/istio/blob/master/samples/bookinfo/src/reviews/reviews-application/src/main/java/application/rest/LibertyRestEndpoint.java#L42
+      - https://github.com/istio/istio/blob/master/samples/bookinfo/src/build-services.sh#L50
+      - https://github.com/istio/istio/blob/master/samples/bookinfo/src/reviews/reviews-wlpcfg/Dockerfile#L28
+
+#### details
+- 사용 언어 및 주요 프레임워크 : `Ruby`, `Webrick`
+- 내부 동작 : 
+  - /details : `id`를 전달받아서, 상세 정보를 json으로 반환한다.
+    - https://github.com/istio/istio/blob/master/samples/bookinfo/src/details/details.rb#L67
+  - tracing() : Zipkin과 같은 tracing tool에서의 사용하는 headers(`x-b3-***`)를 검사하여, 새로운 `span`을 생성한다. 
+    - https://github.com/istio/istio/blob/master/samples/bookinfo/src/productpage/productpage.py#L130
+
+#### ratings
+- 사용 언어 및 주요 프레임워크 : ``Node.js`, `httpdispatcher`
+- 내부 동작 :
+  - /ratings : `reviewer`들의 `ratings` 점수를 json으로 반환한다.
+    - 버전에 따라 다른 동작을 한다.
+      - `v1`에서는 그냥 hard coded data 
+        - https://github.com/istio/istio/blob/master/samples/bookinfo/src/ratings/ratings.js#L142
+      - `v2`에서는 DB를 사용하며, DB_TYPE이라는 환경변수를 통해서 Mysql 혹은 Mongo DB를 사용해서 ratings를 가져온다. 
+        - https://github.com/istio/istio/blob/master/samples/bookinfo/src/ratings/ratings.js#L73
+      - _개인적인 의견 : 버전에 따른 로직을 내부에서 분기하기보다는 버전마다 다른 image(with tag)로 만드는것이 MSA의 장점을 취하는 방법이라고 생각한다._
+
 ### Kubernetes 환경에서의 실행
   `Minikube환경에서는 적어도 4GB램을 보장되어야한다. GKE환경에서는 적어도 4개의 GKE nodes가 필요하다.`
   `본 예제의 환경인 DockerCE에서는 Advanced 메뉴를 통해서 8GB정도를 할당해주기를 바란다.`
