@@ -5,7 +5,7 @@
 - Bookinfo Sample Application 배포 : https://github.com/grepsean/study-istio/blob/master/examples.md
 - Traffic Management 컨셉 확인 : https://istio.io/docs/concepts/traffic-management/
 - [Traffic Routing 섹션](https://github.com/grepsean/study-istio/blob/master/Traffic%20Management/Configuring-Request-Routing.md#configuring-request-routing) 에서 살펴본 아래 실행해 보기
-```bash
+```console
 $ kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
 $ kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
 ```
@@ -22,12 +22,12 @@ Bookinfo microservice에 대한 resiliency를 테스트하기 위해서 `7초` �
 따라서 `7초`의 딜레이를 주더라도, 우선 에러없이 정상적으로 서비스되어야 한다.
 
 1. 우선 `json`이라는 사용자에 대해서 dealy를 발생시키는 fault injection rule을 생성해보자.
-```bash
+```console
 $ kubectl apply -f samples/bookinfo/networking/virtual-service-ratings-test-delay.yaml
 ```
 
 2. 생성된 rule을 확인해보자.
-```bash
+```console
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
 metadata:
@@ -104,12 +104,12 @@ Enterpise 환경에서는 서로 다른 팀에서 다른 microservices를 각각
 이 경우는 페이지를 로드하자마자 `Ratings service is currently unavailable`와 같은 오류 메시지가 나올 것이라고 예상할 수 있다.
 
 1. 일단 샘플내에 미리 만들어놓은 설정을 apply하여 `jason`이라는 사용자에게 HTTP abort를 발생시키게 해보자.
-```bash
+```console
 $ kubectl apply -f samples/bookinfo/networking/virtual-service-ratings-test-abort.yaml
 ```
 
 2. 생성된 `virtualservice`를 확인해보면
-```bash
+```console
 $ kubectl get virtualservice ratings -o yaml
 ```
 ```yaml
@@ -151,7 +151,7 @@ spec:
 
 ### Cleanup
 1. 위에서 적용했던 routing rules를 삭제해보자. 
-```bash
+```console
 $ kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
 ```
 

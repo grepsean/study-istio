@@ -76,7 +76,7 @@ Fortio는 nGrinder나 Siege같은 outgoing HTTP call에 대해서 conntions의 �
 이 Tool을 이용해서 client가 `DestinationRule`에 설정해둔 circuit breaker policy를 _"trip"_ 할 수 있게 해준다.
 
 1. 우선 Istio가 network interaction을 통제할 수 있게 Fortio client를 istio sidecar proxy에 주입해보자.
-```bash
+```console
 $ kubectl apply -f <(istioctl kube-inject -f samples/httpbin/sample-client/fortio-deploy.yaml)
 ```
 

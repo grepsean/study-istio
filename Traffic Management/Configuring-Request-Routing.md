@@ -14,8 +14,13 @@
 
 ## Virtual service 
 우선 모든 요청을 v1으로 라우팅해보자.
+0. 시작사기 앞서 bookinfo application의 default destination rules가 설정되어 있어야한다.
+```console
+$ kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
+```
+
 1. 아래를 실행시켜서 virtual services를 배포하자.
-```bash
+```console
 $ kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
 ```
   - 설정이 적용되기까지는 몇초 정도 소요된다. 
@@ -85,7 +90,7 @@ spec:
   - 위 설정에서 볼 수 있듯이, 모든 service에 대해서 subset을 v1 하나만 설정한것을 확인할 수 있다.
   
 3. 또한 아래 커맨드로 정의되어 있는 subset을 확인할 수 있음
-```bash
+```console
 $ kubectl get destinationrules -o yaml
 ```
 
@@ -102,12 +107,12 @@ istio에서는 user의 identity를 알 수 있는 것을 지원하고 있지 않
 
 
 1. 아래 커맨드로 user-based 라우팅을 배포해보자.
-```bash
+```console
 $ kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
 ```
 
 2. 배포된 virtual service를 확인해보자.
-```bash
+```console
 $ kubectl get virtualservice reviews -o yaml
 ```
 ```yaml
@@ -150,7 +155,7 @@ spec:
 
 ### Cleanup
 1. 아래 커맨드를 이용해 본 섹션에서 사용한 virtual service를 삭제할 수 있다.
-```bash
+```console
 $ kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
 ```
 

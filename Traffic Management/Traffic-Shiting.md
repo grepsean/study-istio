@@ -12,7 +12,7 @@ istio에서는 이런 방법을 route rules에서 traffic의 percent를 설정�
 Bookinfo에서의 destination rule을 설정한 적이 없다면, [Apply Default Destination Rules](https://istio.io/docs/examples/bookinfo/#apply-default-destination-rules)를 통해서 Default Destination rule을 먼저 설정해보자.
 
 1. 우선 아래 커맨드를 통해서 모든 트래픽을 `v1`으로 향하게 하자.
-```bash
+```console
 $ kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
 ```
 
@@ -22,13 +22,13 @@ $ kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
   - 해당 URL로 접근하면 version `reviews:v1`인 review service로 트래픽이 전달되기 때문에, rating starts는 아무리 새로고침해도 보이지 않을 것이다. 
   
 3. 이제 `reviews:v1`에서 `reviews:v3`fh 50%의 트래픽을 전환해보자.
-```bash
+```console
 $ kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
 ```
   - rules가 전파되는데 몇초 정도 기다리자. 
 
 4. 적용된 virtualservice를 확인해보자.
-```bash
+```console
 $ kubectl get virtualservice reviews -o yaml
 ```
 ```yaml
@@ -60,7 +60,7 @@ spec:
 ```
 
 6. 만약 `reviews:v3`에 대해서 안정된 버전이라는 것이 검증되었다면, 이제 트래픽을 100%으로 변경해야할 것이다.
-```bash
+```console
 $ kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-v3.yaml
 ```
   - 이제 부터는 `/productpage`로 새로고침해보면, red start만이 보이게 될 것이다.
@@ -73,7 +73,7 @@ istio를 이용한 Autoscaling에 관심이 있다면, [Canary Deployments using
 
 ### Cleanup
 1. 배포한 routing rules 삭제하자.
-```bash
+```console
 $ kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
 ```
 
