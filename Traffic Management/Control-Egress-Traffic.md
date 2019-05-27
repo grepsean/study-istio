@@ -69,6 +69,93 @@ $ kubectl get configmap istio -n istio-system -o yaml | sed 's/mode: ALLOW_ANY/m
 configmap "istio" replaced
 ```
 
-2. `SOURCE_POD`에서 external HTTPS service
+2. `SOURCE_POD`에서 external HTTPS service로 2번의 requests를 전송해서 block되었는지 확인해보자.
+```console
+$ kubectl exec -it $SOURCE_POD -c sleep -- curl -I https://www.google.com | grep  "HTTP/"; kubectl exec -it $SOURCE_POD -c sleep -- curl -I https://edition.cnn.com | grep "HTTP/"
+command terminated with exit code 35
+command terminated with exit code 35
+```
+- 위의 설정이 적용되는데까지는 몇초정도 걸릴 수 있다.
+
+#### external HTTP service에 접근하기
+1. `ServiceEntry`를 만들어서 external HTTP service로 접근할 수 있게하자.
+```console
+$ kubectl apply -f - <<EOF
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  name: httpbin-ext
+spec:
+  hosts:
+  - httpbin.org
+  ports:
+  - number: 80
+    name: http
+    protocol: HTTP
+  resolution: DNS
+  location: MESH_EXTERNAL
+EOF
+```
+
+2. `SOURCE_POD`에서 external HTTP service로 요청을 보내보자.
+```console
+$ kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/headers
+{
+  "headers": {
+  "Accept": "*/*",
+  "Connection": "close",
+  "Host": "httpbin.org",
+  "User-Agent": "curl/7.60.0",
+  ...
+  "X-Envoy-Decorator-Operation": "httpbin.org:80/*",
+  }
+}
+```
+  - Istio의 sidecar proxy가 `X-Envoy-Decorator-Operation`라는 헤더를 추가한것을 확인할 수 있다.
+  
+3. `SOURCE_POD`의 sidecar proxy에서의 로그를 확인해보자.
+```console
+$ kubectl logs $SOURCE_POD -c istio-proxy | tail
+[2019-01-24T12:17:11.640Z] "GET /headers HTTP/1.1" 200 - 0 599 214 214 "-" "curl/7.60.0" "17fde8f7-fa62-9b39-8999-302324e6def2" "httpbin.org" "35.173.6.94:80" outbound|80||httpbin.org - 35.173.6.94:80 172.30.109.82:55314
+```
+  - `destinationServiceHost`라는 attribute는 `httpbin.org`와 동일할 것이다. 또한 HTTP와 관련된 atrribute인 `method`, `url`, `responseCode`와 같은 것들도 마찬가지이다. Istio의 egress 트래픽 제어를 사용한다면, external service에 대한 monitoring이 가능하며, HTTP-related 정보들에 대해서도 접근이 가능하다.
+  
+#### external HTTPS service에 접근하기
+1. `ServiceEntry`를 생성해서 external HTTPS service에 접근해보자.
+```console
+$ kubectl apply -f - <<EOF
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  name: google
+spec:
+  hosts:
+  - www.google.com
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  resolution: DNS
+  location: MESH_EXTERNAL
+EOF
+```
+
+2. `SOURCE_POD`에서 external HTTPS service로 요청을 보내보자.
+```console
+$ kubectl exec -it $SOURCE_POD -c sleep -- curl -I https://www.google.com | grep  "HTTP/"
+HTTP/2 200
+```
+
+3. `SOURCE_POD`에 있는 sidecar proxy의 로그를 확인해보자.
+```console
+$ kubectl logs $SOURCE_POD -c istio-proxy | tail
+[2019-01-24T12:48:54.977Z] "- - -" 0 - 601 17766 1289 - "-" "-" "-" "-" "172.217.161.36:443" outbound|443||www.google.com 172.30.109.82:59480 172.217.161.36:443 172.30.109.82:59478 www.google.com
+```
+
+4. Mixer 로그를 확인하자. 
+```console
+$ kubectl -n istio-system logs -l istio-mixer-type=telemetry -c mixer | grep 'www.google.com'
+{"level":"info","time":"2019-01-24T12:48:56.266553Z","instance":"tcpaccesslog.logentry.istio-system","connectionDuration":"1.289085134s","connectionEvent":"close","connection_security_policy":"unknown","destinationApp":"","destinationIp":"rNmhJA==","destinationName":"unknown","destinationNamespace":"default","destinationOwner":"unknown","destinationPrincipal":"","destinationServiceHost":"www.google.com","destinationWorkload":"unknown","protocol":"tcp","receivedBytes":601,"reporter":"source","requestedServerName":"www.google.com","sentBytes":17766,"sourceApp":"sleep","sourceIp":"rB5tUg==","sourceName":"sleep-88ddbcfdd-rgk77","sourceNamespace":"default","sourceOwner":"kubernetes://apis/apps/v1/namespaces/default/deployments/sleep","sourcePrincipal":"","sourceWorkload":"sleep","totalReceivedBytes":601,"totalSentBytes":17766}
+```
 
 
