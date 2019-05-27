@@ -157,5 +157,132 @@ $ kubectl logs $SOURCE_POD -c istio-proxy | tail
 $ kubectl -n istio-system logs -l istio-mixer-type=telemetry -c mixer | grep 'www.google.com'
 {"level":"info","time":"2019-01-24T12:48:56.266553Z","instance":"tcpaccesslog.logentry.istio-system","connectionDuration":"1.289085134s","connectionEvent":"close","connection_security_policy":"unknown","destinationApp":"","destinationIp":"rNmhJA==","destinationName":"unknown","destinationNamespace":"default","destinationOwner":"unknown","destinationPrincipal":"","destinationServiceHost":"www.google.com","destinationWorkload":"unknown","protocol":"tcp","receivedBytes":601,"reporter":"source","requestedServerName":"www.google.com","sentBytes":17766,"sourceApp":"sleep","sourceIp":"rB5tUg==","sourceName":"sleep-88ddbcfdd-rgk77","sourceNamespace":"default","sourceOwner":"kubernetes://apis/apps/v1/namespaces/default/deployments/sleep","sourcePrincipal":"","sourceWorkload":"sleep","totalReceivedBytes":601,"totalSentBytes":17766}
 ```
+  - `requestedServerName` attribute는 `www.google.com`일 것이다. Istio의 egress 제어를 사용한다면, external HTTPS services에 접근을 모니터링할 수 있는데, 특정 SNI나 보내거나 받은 bytes같은것들이다. HTTP와 관련된 atrribute인 `method`, `url`, `responseCode`와 같은 것들은 암호화되기때문에 Istio가 볼 수 없고, HTTPS에서의 정보는 모니터링할 수 없다. 만약 external HTTPS service로 접근시 HTTP관련 정보들을 모니터링하고 싶다면, application이 HTTP 요청을 만들고 [Istio TLS origination를 할 수 있도록 설정](https://istio.io/docs/examples/advanced-gateways/egress-tls-origination/)하게 할것이다.
 
 
+#### external services로의 트래픽을 관리하기
+Cluster간의 요청과 유사하게, Istio의 [routing rules](https://istio.io/docs/concepts/traffic-management/#rule-configuration)은 `ServiceEntry`를 설정해서 external serivces로 접근할 수 있게할 것이다. 이 예제에서는 `httpbin.org` 서비스를 호출할때 timeout rule을 설정한다. 
+
+1. Pod내부에서 test source로 사용하기위해서, curl 요청을 통해서 `/delay` endpoint로 요청을 보내보자.
+```console
+$ kubectl exec -it $SOURCE_POD -c sleep sh
+$ time curl -o /dev/null -s -w "%{http_code}\n" http://httpbin.org/delay/5
+200
+
+real    0m5.024s
+user    0m0.003s
+sys     0m0.003s
+```
+  - `200 OK`를 받기까지는 약 5초의 시간이 소요된다.
+  
+2. source pod에서 나와서, `kubectl`을 사용하여 `httpbin.or`라는 external service에 대한 timeout을 `3초`로 설정해보자.
+```console
+$ kubectl apply -f - <<EOF
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: httpbin-ext
+spec:
+  hosts:
+    - httpbin.org
+  http:
+  - timeout: 3s
+    route:
+      - destination:
+          host: httpbin.org
+        weight: 100
+EOF
+```
+
+3. 적용되기 위해 몇초정도 기다렸다가, *curl* 요청을 다시 보내보자.
+```console
+$ kubectl exec -it $SOURCE_POD -c sleep sh
+$ time curl -o /dev/null -s -w "%{http_code}\n" http://httpbin.org/delay/5
+504
+
+real    0m3.149s
+user    0m0.004s
+sys     0m0.004s
+```
+  - 이번에는 3초후에 `504 Gateway Timeout`을 받게 될 것이다. httpbin.org의 경우 5초를 기다리겠지만, Istio는 3초에 request를 끊어버릴 것이다.
+  
+#### cleanup
+```console
+$ kubectl delete serviceentry httpbin-ext google
+$ kubectl delete virtualservice httpbin-ext --ignore-not-found=true
+```
+
+### External service로 바로 접근하기
+특정 IP대역에 대해서는 Istio가 bypass하길 원한다면, Envoy sidecars가 external 요청에 대해서 [intercepting](https://istio.io/docs/concepts/traffic-management/#communication-between-services)하지 않게해야한다. 이 bypass를 설정하기 위해서는, `global.proxy.includeIPRanges`나 `global.proxy.excludeIPRanges` 설정을 변경하면된다. 그리고 `istio-sidecar-injector` 설정을 `kubectl apply`를 이용해서 update하면 된다. `istio-sidecar-injector` 설정을 업데이트하면 이후의 모든 pod deployments에 영향을 미친다.
+
+위에서의 [Envoy passthrough](https://istio.io/docs/tasks/traffic-management/egress/#envoy-passthrough-to-external-services)와는 다르게 `ALLOW_ANY`를 사용해서 Istio sidecar proxy가 unknown serivce로의 요청을 passthroug하게 한다. 이 방법은 sidecar를 bypass하는데 기본적으로 명시된 IPs에 대한 Istio의 모든 기능은 비활성화된다. 따라서 `ALLOW_ANY`를 사용한다면 특정 destination에 대해서 service 추가할 수 없게된다. 
+그러므로 이 설정 방법은 sidecar를 사용해서 external 접속을 설정할 수 없는 경우에서 성능이나 다른 이유일때 사용하는 것을 권장한다. 
+
+Sidecar proxy로 redirect시킬 외부 IPs를 제외하는 간단한 방법은 `global.proxy.includeIPRanges` 옵션을 IP range나 internal cluster service를 위한 range로 설정하는 것이다. 이러한 IP range 값은 cluster가 실행되는 platform에 종속적이다. 
+
+#### Determine the internal IP ranges for your platform
+`global.proxy.includeIPRanges`옵션 값을 cluster provider에 따라서 설정해보자.
+
+##### Minikube, Docker For Desktop, Bare Metal
+기본 값은 `10.96.0.0/12`로 설정되어 있으며, 변경할 수 없다. 아래 커맨드를 이용해서 실제 값을 가져오자.
+```console
+$ kubectl describe pod kube-apiserver -n kube-system | grep 'service-cluster-ip-range'
+      --service-cluster-ip-range=10.96.0.0/12
+```
+
+### Configuring the proxy bypass
+`이전 사용했던 service entry와 virtual service를 제거하고 진행하자`
+
+Platform에 맞는 IP range를 명시해서 `istio-sidecar-injector` 설정을 업데이트하자.
+```console
+helm template install/kubernetes/helm/istio <the flags you used to install Istio> --set global.proxy.includeIPRanges="10.0.0.1/24" -x templates/sidecar-injector-configmap.yaml | kubectl apply -f -
+```
+Istio 설치할때와 동일한 Helm 커맨드를 사용한다. 특히 `--namespace` flag와 `--set global.proxy.includeIPRanges="10.0.0.1/24" -x templates/sidecar-injector-configmap.yaml` flags를 사용하는 것에 유의하자.
+
+
+#### 외부 서비스에 접근하기
+이 bypass 설정은 새로운 deployments일 경우에만 영향을 미치기 때문에, 기존의 `sleep` application을 재배포할 필요가 있다. 
+
+`istio-sidecar-injector` configmap을 업데이트한 후에, `sleep` application을 재배포한다. Istio의 sidecar는 internal request에 대해서만 intercept하거나 제어할 것이다. 그리고 external request에 대해서는 bypass할 것이다. 
+```console
+$ export SOURCE_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
+$ kubectl exec -it $SOURCE_POD -c sleep curl http://httpbin.org/headers
+{
+  "headers": {
+    "Accept": "*/*",
+    "Connection": "close",
+    "Host": "httpbin.org",
+    "User-Agent": "curl/7.60.0"
+  }
+}
+```
+HTTP나 HTTPS를 통해서 external serivce로 접근하는것과 다르게, Istio sidecar와 관련된 어떤 header도 확인할 수 없을 것이다. external service로 전송되는 모든 요청은 sidecar의 로그 혹은 Mixer의 로그에서 확인할 수 없을 것이다. Istio의 sidecar로 Bypassing한다는 것은 external service로 접근하는것에 대해서 더 이상 monitor하지 않겠다는 의미를 가진다.
+
+#### cleanup
+모든 outbound 요청에 대해서 sidecar proxy로 redirect하도록 `istio-sidecar-injector.configmap.yaml`설정을 변경하자. 
+```console
+$ helm template install/kubernetes/helm/istio <the flags you used to install Istio> -x templates/sidecar-injector-configmap.yaml | kubectl apply -f -
+```
+
+### Understanding what happened
+이번 장에서는 external service에 접근하기 위한 3가지 방법에 대해서 살펴보았다. 
+1. Envoy proxy가 mesh 내부에 설정하지 않은 service로의 접근을 허용하는 방법
+2. [Service entries](https://istio.io/docs/reference/config/networking/v1alpha3/service-entry/)를 설정하여 external service로의 접근을 제어하는 방법, **이 방법이 추천하는 방법이다.**
+3. 특정 IP 대역에 대해서 Envoy proxy가 bypass하는 방법
+
+첫번째 방법은 mesh내부에서 unknwon service에 접근하기위해서 Istio sidecar proxy에 바로 트래픽을 전달하는 방법이다. 이 방법을 사용할때는 external serivce로 접근할때 monitor할 수 없으며, Istio의 트래픽 제어하는 기능을 제대로 사용하지 못하게 된다. 특정 services에 대해서 두번째방법으로 빠르게 전환하기 위해서 external services에 대해서 service entries를 생성해야한다. 이 과정은 모든 external serivce에 대해서 일단 접근이 가능하게 하고 나중에 접근을 제어할지 결정할 수 있다. 또한 트래픽에 대해서 monitoring이나 제어 기능을 사용할 수 있다.
+
+두번째 방법은 service가 내부에 있건 외부에 있건, Istio service mesh 기능을 동일하게 사용하게 하는 방법이다. 위에서는 external service에 대한 접근을 어떻게 monitor하거나 timeout 설정을 하는지 알아보았다.
+
+세번째 방법은 external server로 바로 접근할 수 있도록 Istio sidecar proxy로 bypass하는 방법이다. 하지만 이 방법은 cluster provider에 따라서 추가적인 설정 필요로 한다. 첫번째 방법과 비슷하게, 모니터링이나 트래픽제어와 같은 Istio의 기능을 제대로 사용할 수 없게된다.
+
+
+### Security note
+본 예제에서는 **secure egress**를 제공하지는 않는다. 어떤 악의적인 application이 Istio sidecar proxy를 bypass해서 Istio의 제어없이 external service로의 접근을 가능하게 할 수 있다.
+
+
+### Cleanup
+`sleep` 서비스를 내리자.
+```console
+$ kubectl delete -f samples/sleep/sleep.yaml
+```
