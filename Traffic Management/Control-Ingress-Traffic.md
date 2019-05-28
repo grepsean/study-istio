@@ -3,6 +3,71 @@ Kubernetes환경에서 [Kubernetes Ingress](https://kubernetes.io/docs/concepts/
 
 여기에서는 istio가 `Gateway`를 이용해서 서비스를 mesh 외부에 어떻게 노출시키는지 살펴볼 것이다.
 
+### Ingress Concept
+#### Ingress란?
+Networking community에서 나온 용어로 외부로부터 내부 네트워크의 외부에서 안쪽으로 들어오는 트래픽을 의미하며, 트래픽이 내부 네트워크 상에서 최초로 통과하는 부분을 Ingress Point라고 한다. 이 Ingress point를 통하지 않는다면, 내부 네트워크로 트래픽이 인입될 수 없다. 또한 Ingress point는 내부 네트워크의 특정 endpoint로 proxy해주는 역할을 한다.
+
+#### Reverse proxy
+Ingress는 reverse proxy와 동일한 역할을 수행하며, 외부의 요청에 대해서 Cluster 내부의 service로 proxy해주며, service 단위의 load balancing 기능도 제공해준다.
+
+#### Istio Gateway
+Istio에서는 이런 Ingress 역할을 담당하는 것이 Gateway이다. 즉 Ingress point 역할을 수행해서 cluster 외부에서 내부로 트래픽을 전달하고, load balancing, virtual-host routing 등을 수행한다.
+
+또한 Istio Gateway는 Istio의 control plane 중 하나로, ingress proxy를 구현하는데 Envoy를 사용한다. 
+Istio를 설치했다면, 초기화 과정에서 이미 ingress의 구현체가 설치되어 있을 것이다.
+```console
+$ kubectl gte pod -n istio-system
+NAME                                      READY     STATUS      RESTARTS   AGE
+istio-ingressgateway-788c96cd5f-lfxk9     1/1       Running     0          28d
+
+$ kubectl get pod istio-ingressgateway-788c96cd5f-lfxk9 -o json -n istio-system
+{
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+        "labels": {
+            "app": "istio-ingressgateway",
+            "istio": "ingressgateway",
+            "release": "istio"
+            "chart": "gateways",
+            "heritage": "Tiller",
+            "pod-template-hash": "3447527819",
+        }
+        ...
+    ...
+}
+
+$ kubectl get svc -n istio-system
+NAME                     TYPE         CLUSTER-IP    EXTERNAL-IP   PORT(S)          AGE
+istio-ingressgateway   LoadBalancer  10.104.143.79  localhost    80:31380/TCP...   28d
+
+$ kubectl get svc istio-ingressgateway -o json -n istio-system
+{
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+        "selector": {
+            "app": "istio-ingressgateway",
+            "istio": "ingressgateway",
+            "release": "istio"
+        },
+        ...
+    ...
+}
+```
+
+#### Gateway, VirtualService
+- Gateway : 클러스터 외부에 내부로 트래픽을 허용하는 설정
+- VirtualService : 클러스터 내부로 들어온 트래픽을 특정 서비스로 라우팅하는 설정
+
+#### 그런데 왜 Kubernetes의 Ingress를 사용하지 않은 것인가?
+Istio도 초기에는 Kubernetes의 Ingerss를 사용했지만, 아래과 같은 이유로 Gateway를 만들었다고 한다.
+
+1. Kubernetes의 Ingress는 HTTP/S 트래픽만 전달해주는 너무 심플한 spec이기때문이다. Kafka같은 큐를 사용한다면, broker를 TCP connection으로 제공해줄 수 있지만 Kubernetes Ingress에서는 이를 지원하지 않는다.
+
+2. 또한 Kubernetes Ingress가 특정 패키지에 종속적이기 때문이다. 다르게 말해서 정해진 표준이 없고 구현체(Nginx, HAProxy, Traefik, Ambassodor) 마다 설정 방법이 다르다. 복잡한 routing rule, traffic splitting, shadowing등 상세한 설정을 하기 위한 표준화된 방법이 없다. 그렇다고 Istio도 새로운 구현체를 만들어서 추가한다면 더욱 복잡해질 것이다.
+
+
 ### 준비 
 - Istio 설치 : https://github.com/grepsean/study-istio/blob/master/setup.md
 - [httpbin](https://github.com/istio/istio/tree/release-1.1/samples/httpbin) 샘플 설치
